@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>교사 호출 시스템 - 본교무실</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --table-font: 28px; --header-font: 20px; --clock-font: 36px; --title-font: 38px; }
+    body { font-family: 'Noto Sans KR', sans-serif; background: #0a0e17; color: #e8e6f0; }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes popup-in { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes flash-alert { 0%, 100% { background: rgba(220,38,38,0.06); } 50% { background: rgba(220,38,38,0.12); } }
+    .screen { min-height: 100vh; position: relative; }
+    .bg-grid { position: absolute; inset: 0; opacity: 0.04; background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px); background-size: 60px 60px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; border-bottom: 1px solid rgba(255,255,255,0.06); position: relative; z-index: 2; }
+    .datetime { display: flex; align-items: center; gap: 16px; }
+    .datetime span { font-size: 28px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+    .switch-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #888; font-size: 11px; padding: 6px 14px; border-radius: 4px; cursor: pointer; letter-spacing: 1px; margin-left: 16px; }
+    .hidden { display: none !important; }
+    #kiosk { background: linear-gradient(160deg, #0a0e17 0%, #131928 40%, #1a1020 100%); }
+    .kiosk-center { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 100px); padding: 40px 24px; position: relative; z-index: 2; }
+    .warning-icon { width: 80px; height: 80px; border-radius: 20px; margin: 0 auto 24px; background: linear-gradient(135deg, #dc2626, #991b1b); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 40px rgba(220,38,38,0.3); }
+    .idle-title { font-size: var(--title-font); font-weight: 800; margin: 0 0 12px; letter-spacing: -1px; color: #fff; }
+    .idle-period { font-size: 18px; color: rgba(239,68,68,0.8); font-weight: 700; margin: 0 0 40px; }
+    .office-name { font-size: 15px; color: #888; margin: 0 0 8px; font-weight: 600; letter-spacing: 1px; }
+    .btn-red { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; border: none; padding: 18px 48px; border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 24px rgba(220,38,38,0.4); transition: transform 0.15s; font-family: inherit; }
+    .btn-red:hover { transform: scale(1.03); }
+    .btn-red:disabled { background: #555; box-shadow: none; cursor: wait; }
+    .btn-back { background: none; border: none; color: #888; font-size: 14px; cursor: pointer; margin-bottom: 16px; padding: 0; }
+    .form-label { font-size: 12px; color: #aaa; letter-spacing: 1px; display: block; margin-bottom: 8px; text-transform: uppercase; font-weight: 600; }
+    .form-input { width: 100%; padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #fff; font-size: 16px; outline: none; box-sizing: border-box; font-family: inherit; }
+    .form-input:focus { border-color: #dc2626; }
+    .popup-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
+    .popup-box { background: linear-gradient(160deg, #1a1f2e, #1e1428); border: 1px solid rgba(34,197,94,0.3); border-radius: 20px; padding: 48px 56px; text-align: center; box-shadow: 0 0 60px rgba(34,197,94,0.15); animation: popup-in 0.3s ease-out; }
+    .popup-check { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 20px; background: rgba(34,197,94,0.15); border: 2px solid #22c55e; display: flex; align-items: center; justify-content: center; }
+    .btn-green { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; border: none; padding: 14px 40px; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(34,197,94,0.4); font-family: inherit; }
+    #dashboard { background: linear-gradient(160deg, #0a0e17 0%, #131928 40%, #1a1020 100%); }
+    .dash-topbar { padding: 24px 40px; }
+    .dash-topbar .datetime span { font-size: var(--clock-font); }
+    .dash-title-area { display: flex; align-items: center; gap: 14px; }
+    .pulse-dot { width: 14px; height: 14px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 16px rgba(239,68,68,0.67); animation: pulse-dot 2s infinite; }
+    .dash-title { font-size: 20px; font-weight: 700; letter-spacing: 3px; color: rgba(239,68,68,0.8); }
+    .table-wrap { padding: 32px 40px; overflow-y: auto; max-height: calc(100vh - 100px); }
+    .alert-table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+    .alert-table th { padding: 22px 28px; font-size: var(--header-font); font-weight: 700; color: #888; letter-spacing: 2px; text-transform: uppercase; text-align: left; border-bottom: 2px solid rgba(255,255,255,0.15); position: sticky; top: 0; background: #0e1219; z-index: 2; }
+    .alert-table td { padding: 22px 28px; font-size: var(--table-font); font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: middle; }
+    .alert-table tr.alert-row { animation: flash-alert 2s infinite; }
+    .col-time { color: #aaa; font-variant-numeric: tabular-nums; }
+    .col-teacher { color: #fff; font-weight: 700; }
+    .col-student { color: #fff; }
+    .col-id { color: #aaa; }
+    .empty-msg { text-align: center; padding: 80px 28px !important; color: #555; font-size: 24px !important; }
+  </style>
+</head>
+<body>
+
+<div id="kiosk" class="screen">
+  <div class="bg-grid"></div>
+  <div class="topbar">
+    <div></div>
+    <div class="datetime">
+      <span id="kiosk-date"></span>
+      <span id="kiosk-time"></span>
+    </div>
+    <button class="switch-btn" onclick="showDashboard()">교사용 화면 →</button>
+  </div>
+  <div class="kiosk-center">
+    <div id="idle-screen" style="text-align:center; max-width:600px;">
+      <div class="warning-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+          <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+      </div>
+      <p class="office-name">본교무실</p>
+      <h1 class="idle-title">시험기간 출입금지</h1>
+      <p class="idle-period">출입금지기간 4/2(월)~4/26(목)</p>
+      <button class="btn-red" onclick="showSelectScreen()">선생님 호출하기</button>
+    </div>
+    <div id="select-screen" class="hidden" style="width:100%; max-width:700px;">
+      <button class="btn-back" onclick="showIdleScreen()">← 뒤로</button>
+      <h2 style="font-size:26px; font-weight:700; margin:0 0 24px; color:#fff;">선생님 호출하기</h2>
+      <div style="margin-bottom:16px;">
+        <label class="form-label">이름</label>
+        <input id="input-name" class="form-input" placeholder="이름을 입력하세요">
+      </div>
+      <div style="margin-bottom:28px;">
+        <label class="form-label">학번</label>
+        <input id="input-id" class="form-input" placeholder="학번을 입력하세요">
+      </div>
+      <label class="form-label" style="margin-bottom:12px;">선생님 선택</label>
+      <div id="teacher-grid"></div>
+      <button id="submit-btn" class="btn-red hidden" style="margin-top:28px; width:100%; padding:16px; font-size:16px; font-family:inherit;" onclick="handleSubmit()">호출하기</button>
+    </div>
+  </div>
+  <div id="popup" class="popup-overlay hidden">
+    <div class="popup-box">
+      <div class="popup-check">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+      </div>
+      <h2 style="font-size:28px; font-weight:800; color:#fff; margin:0 0 8px;">호출하였습니다</h2>
+      <p id="popup-msg" style="color:#888; font-size:15px; margin:0 0 28px;"></p>
+      <button class="btn-green" onclick="resetKiosk()">확인</button>
+    </div>
+  </div>
+
+  <!-- Timetable Popup -->
+  <div id="timetable-popup" class="popup-overlay hidden" onclick="closeTimetable()">
+    <div style="background:linear-gradient(160deg,#1a1f2e,#1e1428);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:24px;text-align:center;box-shadow:0 0 60px rgba(0,0,0,0.5);animation:popup-in 0.3s ease-out;max-width:90vw;max-height:90vh;overflow:auto;" onclick="event.stopPropagation()">
+      <h2 id="timetable-title" style="font-size:20px;font-weight:700;color:#fff;margin:0 0 16px;"></h2>
+      <img id="timetable-img" src="" style="max-width:100%;max-height:70vh;border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+      <br>
+      <button onclick="closeTimetable()" style="margin-top:16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ccc;padding:10px 32px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div id="dashboard" class="screen hidden">
+  <div class="topbar dash-topbar">
+    <div class="dash-title-area">
+      <div class="pulse-dot"></div>
+      <span class="dash-title">본교무실</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:24px;">
+      <div class="datetime">
+        <span id="dash-date"></span>
+        <span id="dash-time"></span>
+      </div>
+      <button class="switch-btn" onclick="showKiosk()">키오스크 화면 →</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th style="width:20%">시간</th>
+          <th style="width:30%">선생님</th>
+          <th style="width:25%">학생 이름</th>
+          <th style="width:25%">학번</th>
+        </tr>
+      </thead>
+      <tbody id="alert-tbody">
+        <tr><td class="empty-msg" colspan="4">아직 호출 기록이 없습니다.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const APPS_SCRIPT_URL = "여기에_Apps_Script_URL을_붙여넣으세요";
+  const OFFICE = "본교무실";
+
+  let TEACHERS = [];
+  let selectedTeacher = null;
+  let prevAlertCount = -1;
+  let audioCtx = null;
+
+  // Load settings from Google Sheets
+  async function loadSettings() {
+    try {
+      const res = await fetch(APPS_SCRIPT_URL + "?action=settings");
+      const json = await res.json();
+      const s = json.data || {};
+      if (s["테이블글자크기"]) document.documentElement.style.setProperty("--table-font", s["테이블글자크기"] + "px");
+      if (s["헤더글자크기"]) document.documentElement.style.setProperty("--header-font", s["헤더글자크기"] + "px");
+      if (s["시계글자크기"]) document.documentElement.style.setProperty("--clock-font", s["시계글자크기"] + "px");
+      if (s["제목글자크기"]) document.documentElement.style.setProperty("--title-font", s["제목글자크기"] + "px");
+    } catch(e) { console.error("설정 로딩 실패:", e); }
+  }
+  loadSettings();
+
+  // Clock
+  function updateClock() {
+    const now = new Date();
+    const d = now.toLocaleDateString("ko-KR", { weekday: "long", month: "long", day: "numeric" });
+    const t = now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    ["kiosk-date","dash-date"].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = d; });
+    ["kiosk-time","dash-time"].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = t; });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Alarm - 띵띵동 벨소리 + TTS
+  function dingBell(ctx, freq, time, dur) {
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc3 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    const g2 = ctx.createGain();
+    const g3 = ctx.createGain();
+    const master = ctx.createGain();
+    osc1.type = "sine"; osc1.frequency.value = freq;
+    g1.gain.setValueAtTime(0.7, time);
+    g1.gain.exponentialRampToValueAtTime(0.001, time + dur);
+    osc2.type = "sine"; osc2.frequency.value = freq * 2.76;
+    g2.gain.setValueAtTime(0.24, time);
+    g2.gain.exponentialRampToValueAtTime(0.001, time + dur * 0.4);
+    osc3.type = "sine"; osc3.frequency.value = freq * 5.4;
+    g3.gain.setValueAtTime(0.08, time);
+    g3.gain.exponentialRampToValueAtTime(0.001, time + dur * 0.15);
+    master.gain.setValueAtTime(1.0, time);
+    osc1.connect(g1).connect(master).connect(ctx.destination);
+    osc2.connect(g2).connect(master);
+    osc3.connect(g3).connect(master);
+    [osc1, osc2, osc3].forEach(o => { o.start(time); o.stop(time + dur + 0.1); });
+  }
+
+  function playAlarm(teacherName, studentName) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioCtx.currentTime;
+      const freqs = [988, 1245, 1480];
+      const noteGap = 0.065;
+      const repeatGap = 0.225;
+      for (let r = 0; r < 2; r++) {
+        const offset = r * (noteGap * 2 + repeatGap);
+        dingBell(audioCtx, freqs[0], now + offset, 0.3);
+        dingBell(audioCtx, freqs[1], now + offset + noteGap, 0.3);
+        dingBell(audioCtx, freqs[2], now + offset + noteGap * 2, 0.5);
+      }
+    } catch(e) {}
+
+    // TTS after bell
+    if ('speechSynthesis' in window && teacherName && studentName) {
+      setTimeout(() => {
+        const msg = new SpeechSynthesisUtterance(
+          teacherName + " 선생님, " + studentName + " 학생이 방문하였습니다."
+        );
+        msg.lang = "ko-KR";
+        msg.rate = 0.9;
+        msg.volume = 1;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(msg);
+      }, 900);
+    }
+  }
+
+  // Timetable popup
+  function showTimetable(name, url) {
+    let imgUrl = url;
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) {
+      imgUrl = "https://lh3.googleusercontent.com/d/" + match[1];
+    }
+    document.getElementById("timetable-title").textContent = name + " 선생님 시간표";
+    const img = document.getElementById("timetable-img");
+    img.src = imgUrl;
+    img.onerror = function() {
+      if (match) {
+        this.src = "https://drive.google.com/uc?export=view&id=" + match[1];
+      }
+    };
+    document.getElementById("timetable-popup").classList.remove("hidden");
+  }
+  function closeTimetable() {
+    document.getElementById("timetable-popup").classList.add("hidden");
+    document.getElementById("timetable-img").src = "";
+  }
+
+  // Screens
+  function showKiosk() { document.getElementById("kiosk").classList.remove("hidden"); document.getElementById("dashboard").classList.add("hidden"); }
+  function showDashboard() { document.getElementById("kiosk").classList.add("hidden"); document.getElementById("dashboard").classList.remove("hidden"); if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+  function showIdleScreen() { document.getElementById("idle-screen").classList.remove("hidden"); document.getElementById("select-screen").classList.add("hidden"); resetForm(); }
+  function showSelectScreen() { document.getElementById("idle-screen").classList.add("hidden"); document.getElementById("select-screen").classList.remove("hidden"); }
+
+  // Load teachers from Google Sheets
+  async function loadTeachers() {
+    try {
+      const res = await fetch(APPS_SCRIPT_URL + "?action=teachers");
+      const json = await res.json();
+      const data = json.data || [];
+      TEACHERS = data.map((t, i) => ({ id: i+1, name: t.name, subject: t.subject || "", dept: t.dept || "", timetable: t.timetable || "" }));
+    } catch(e) { console.error("선생님 로딩 실패:", e); }
+    renderTeacherGrid();
+  }
+  loadTeachers();
+
+  // Teacher table
+  function renderTeacherGrid() {
+    const container = document.getElementById("teacher-grid");
+    const depts = []; const deptMap = {};
+    TEACHERS.forEach(t => { if(!deptMap[t.dept]) { deptMap[t.dept] = []; depts.push(t.dept); } deptMap[t.dept].push(t); });
+    let html = '<table style="width:100%;border-collapse:collapse;"><thead><tr>' +
+      '<th style="padding:12px 16px;font-size:13px;font-weight:700;color:#888;text-align:left;border-bottom:1px solid rgba(255,255,255,0.12);letter-spacing:1px;">부서</th>' +
+      '<th style="padding:12px 16px;font-size:13px;font-weight:700;color:#888;text-align:left;border-bottom:1px solid rgba(255,255,255,0.12);letter-spacing:1px;">성함</th>' +
+      '<th style="padding:12px 16px;font-size:13px;font-weight:700;color:#888;text-align:left;border-bottom:1px solid rgba(255,255,255,0.12);letter-spacing:1px;">과목</th>' +
+      '<th style="padding:12px 16px;font-size:13px;font-weight:700;color:#888;text-align:left;border-bottom:1px solid rgba(255,255,255,0.12);letter-spacing:1px;">시간표</th>' +
+      '</tr></thead><tbody>';
+    depts.forEach(dept => {
+      deptMap[dept].forEach((t, idx) => {
+        const sel = selectedTeacher?.id === t.id;
+        const ttBtn = t.timetable
+          ? '<button onclick="event.stopPropagation();showTimetable(\''+t.name+'\',\''+t.timetable+'\')" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#aaa;padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">조회</button>'
+          : '';
+        html += '<tr onclick="selectTeacher('+t.id+')" style="cursor:pointer;transition:all 0.15s;'+(sel?'background:rgba(220,38,38,0.2);outline:2px solid #dc2626;outline-offset:-2px;':'')+'border-bottom:1px solid rgba(255,255,255,0.04);">' +
+          '<td style="padding:14px 16px;font-size:14px;color:#888;font-weight:600;">'+(idx===0?dept:'')+'</td>' +
+          '<td style="padding:14px 16px;font-size:15px;color:'+(sel?'#fff':'#ddd')+';font-weight:'+(sel?'700':'500')+';">'+t.name+'</td>' +
+          '<td style="padding:14px 16px;font-size:14px;color:'+(sel?'#fca5a5':'#888')+';">'+t.subject+'</td>' +
+          '<td style="padding:14px 16px;">'+ttBtn+'</td></tr>';
+      });
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+  function selectTeacher(id) { selectedTeacher = TEACHERS.find(t=>t.id===id); renderTeacherGrid(); checkSubmitBtn(); }
+
+  // Form
+  function checkSubmitBtn() {
+    const n = document.getElementById("input-name").value.trim();
+    const i = document.getElementById("input-id").value.trim();
+    document.getElementById("submit-btn").classList.toggle("hidden", !(n && i && selectedTeacher));
+  }
+  document.getElementById("input-name").addEventListener("input", checkSubmitBtn);
+  document.getElementById("input-id").addEventListener("input", checkSubmitBtn);
+  function resetForm() { document.getElementById("input-name").value=""; document.getElementById("input-id").value=""; selectedTeacher=null; document.getElementById("submit-btn").classList.add("hidden"); renderTeacherGrid(); }
+  function resetKiosk() { document.getElementById("popup").classList.add("hidden"); showIdleScreen(); }
+
+  // Submit
+  async function handleSubmit() {
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true; btn.textContent = "전송 중...";
+    try {
+      await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({
+        studentName: document.getElementById("input-name").value.trim(),
+        studentId: document.getElementById("input-id").value.trim(),
+        teacherId: selectedTeacher.id, teacherName: selectedTeacher.name
+      })});
+    } catch(e) { console.error("전송 실패:", e); }
+    btn.disabled = false; btn.textContent = "호출하기";
+    document.getElementById("popup-msg").textContent = selectedTeacher.name + " 선생님에게 알림이 전송되었습니다.";
+    document.getElementById("popup").classList.remove("hidden");
+  }
+
+  // Dashboard polling
+  let lastAlertData = [];
+  async function pollAlerts() {
+    try {
+      const res = await fetch(APPS_SCRIPT_URL + "?action=alerts");
+      const json = await res.json();
+      const data = json.data || [];
+
+      // Detect new alerts and play TTS for each
+      if (prevAlertCount >= 0 && data.length > prevAlertCount) {
+        const newAlerts = data.slice(prevAlertCount);
+        newAlerts.forEach((a, i) => {
+          setTimeout(() => {
+            playAlarm(a.teacherName, a.studentName);
+          }, i * 2000); // 2초 간격으로 TTS 재생 (겹치지 않게)
+        });
+      }
+      prevAlertCount = data.length;
+
+      const tbody = document.getElementById("alert-tbody");
+      if (data.length === 0) { tbody.innerHTML = '<tr><td class="empty-msg" colspan="4">아직 호출 기록이 없습니다.</td></tr>'; return; }
+      tbody.innerHTML = [...data].reverse().map(a =>
+        '<tr class="alert-row"><td class="col-time">'+(a.timestamp||'')+'</td><td class="col-teacher">'+(a.teacherName||'')+'</td><td class="col-student">'+(a.studentName||'')+'</td><td class="col-id">'+(a.studentId||'')+'</td></tr>'
+      ).join("");
+    } catch(e) { console.error("데이터 조회 실패:", e); }
+  }
+  pollAlerts();
+  setInterval(pollAlerts, 3000);
+</script>
+</body>
+</html>
